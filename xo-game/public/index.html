@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة إكس-أو</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- شاشة إدخال الأسماء -->
+    <div id="playerForm">
+        <h1>ابدأ لعبة إكس-أو</h1>
+        <form>
+            <label for="player1">اللاعب 1 (اسم):</label>
+            <input type="text" id="player1" placeholder="ادخل اسم اللاعب 1" required>
+            <label for="symbol1">رمز اللاعب 1:</label>
+            <select id="symbol1">
+                <option value="X">X</option>
+                <option value="O">O</option>
+            </select>
+            
+            <label for="player2">اللاعب 2 (اسم):</label>
+            <input type="text" id="player2" placeholder="ادخل اسم اللاعب 2" required>
+            <label for="symbol2">رمز اللاعب 2:</label>
+            <select id="symbol2">
+                <option value="X">X</option>
+                <option value="O">O</option>
+            </select>
+
+            <button type="submit">ابدأ اللعبة</button>
+        </form>
+    </div>
+
+    <!-- شاشة اللعبة -->
+    <div id="game" style="display:none;">
+        <h2 id="turnInfo">اللاعب 1: ينتظر الدور</h2>
+        <div id="board">
+            <div class="cell" data-index="0"></div>
+            <div class="cell" data-index="1"></div>
+            <div class="cell" data-index="2"></div>
+            <div class="cell" data-index="3"></div>
+            <div class="cell" data-index="4"></div>
+            <div class="cell" data-index="5"></div>
+            <div class="cell" data-index="6"></div>
+            <div class="cell" data-index="7"></div>
+            <div class="cell" data-index="8"></div>
+        </div>
+        <button id="restartBtn">إعادة اللعب</button>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        // التعامل مع إرسال البيانات عند بدء اللعبة
+        document.querySelector('form').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const player1 = document.getElementById('player1').value;
+            const player2 = document.getElementById('player2').value;
+            const symbol1 = document.getElementById('symbol1').value;
+            const symbol2 = document.getElementById('symbol2').value;
+
+            if (player1 && player2 && symbol1 && symbol2) {
+                // إرسال بيانات اللاعبين إلى السيرفر
+                socket.emit('startGame', { name: player1, symbol: symbol1 });
+                socket.emit('startGame', { name: player2, symbol: symbol2 });
+
+                // إخفاء شاشة الإدخال وعرض شاشة اللعبة
+                document.getElementById('playerForm').style.display = 'none';
+                document.getElementById('game').style.display = 'block';
+            } else {
+                alert('يرجى إدخال جميع البيانات');
+            }
+        });
+
+        // استلام حالة اللعبة من السيرفر
+        socket.on('gameState', (gameData) => {
+            console.log(gameData);
+        });
+
+        // عند بدء اللعبة من السيرفر
+        socket.on('gameStart', (data) => {
+            alert(data.message);
+            document.getElementById('turnInfo').textContent = `دور: ${data.currentPlayer}`;
+        });
+
+        // عند قيام أحد اللاعبين بتحريك
+        document.getElementById('board').addEventListener('click', (event) => {
+            const cell = event.target;
+            const index = cell.getAttribute('data-index');
+
+            if (!cell.textContent) {
+                socket.emit('makeMove', index);
+            }
+        });
+
+        // استلام التحديثات من السيرفر
+        socket.on('gameState', (gameState) => {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach((cell, index) => {
+                cell.textContent = gameState.board[index];
+            });
+
+            // تحديث دور اللاعب الحالي
+            document.getElementById('turnInfo').textContent = `دور: ${gameState.currentPlayer === 'player1' ? gameState.player1 : gameState.player2}`;
+        });
+
+        // إعادة اللعبة
+        document.getElementById('restartBtn').addEventListener('click', () => {
+            socket.emit('restartGame');
+        });
+
+        // استلام إشعار بنهاية اللعبة
+        socket.on('gameOver', (data) => {
+            if (data.winner === 'tie') {
+                alert('التعادل!');
+            } else {
+                alert(`الفائز: ${data.winner}`);
+            }
+            document.getElementById('game').style.display = 'none';
+            document.getElementById('playerForm').style.display = 'block';
+        });
+    </script>
+
+</body>
+</html>
